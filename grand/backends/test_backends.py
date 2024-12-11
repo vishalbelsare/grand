@@ -1,5 +1,6 @@
 import pytest
 import os
+import pandas as pd
 
 import networkx as nx
 
@@ -13,6 +14,20 @@ except ImportError:
     _CAN_IMPORT_DYNAMODB = False
 
 try:
+    from ._igraph import IGraphBackend
+
+    _CAN_IMPORT_IGRAPH = True
+except ImportError:
+    _CAN_IMPORT_IGRAPH = False
+
+try:
+    from ._networkit import NetworkitBackend
+
+    _CAN_IMPORT_NETWORKIT = True
+except ImportError:
+    _CAN_IMPORT_NETWORKIT = False
+
+try:
     from ._sqlbackend import SQLBackend
 
     _CAN_IMPORT_SQL = True
@@ -24,43 +39,68 @@ from .. import Graph
 
 backend_test_params = [
     pytest.param(
-        NetworkXBackend,
+        (NetworkXBackend, {}),
         marks=pytest.mark.skipif(
             os.environ.get("TEST_NETWORKXBACKEND", default="1") != "1",
             reason="NetworkX Backend skipped because $TEST_NETWORKXBACKEND != 1.",
         ),
+        id="NetworkXBackend",
     ),
 ]
 backend_test_params = [
     pytest.param(
-        DataFrameBackend,
+        (DataFrameBackend, {}),
         marks=pytest.mark.skipif(
             os.environ.get("TEST_DATAFRAMEBACKEND", default="1") != "1",
             reason="DataFrameBackend skipped because $TEST_DATAFRAMEBACKEND != 1.",
         ),
+        id="DataFrameBackend",
     ),
 ]
 
 if _CAN_IMPORT_DYNAMODB:
     backend_test_params.append(
         pytest.param(
-            DynamoDBBackend,
+            (DynamoDBBackend, {}),
             marks=pytest.mark.skipif(
                 os.environ.get("TEST_DYNAMODB", default="1") != "1",
                 reason="DynamoDB Backend skipped because $TEST_DYNAMODB != 0 or boto3 is not installed",
             ),
+            id="DynamoDBBackend",
         ),
     )
 
 if _CAN_IMPORT_SQL:
     backend_test_params.append(
         pytest.param(
-            SQLBackend,
+            (SQLBackend, {"db_url": "sqlite:///:memory:"}),
             marks=pytest.mark.skipif(
-                os.environ.get("TEST_SQLBACKEND", default="1") != "1"
-                or not _CAN_IMPORT_SQL,
+                os.environ.get("TEST_SQLBACKEND", default="1") != "1",
                 reason="SQL Backend skipped because $TEST_SQLBACKEND != 1 or sqlalchemy is not installed.",
             ),
+            id="SQLBackend",
+        ),
+    )
+if _CAN_IMPORT_IGRAPH:
+    backend_test_params.append(
+        pytest.param(
+            (IGraphBackend, {}),
+            marks=pytest.mark.skipif(
+                os.environ.get("TEST_IGRAPHBACKEND", default="1") != "1",
+                reason="IGraph Backend skipped because $TEST_IGRAPHBACKEND != 1 or igraph is not installed.",
+            ),
+            id="IGraphBackend",
+        ),
+    )
+if _CAN_IMPORT_NETWORKIT:
+    backend_test_params.append(
+        pytest.param(
+            (NetworkitBackend, {}),
+            marks=pytest.mark.skipif(
+                os.environ.get("TEST_NETWORKIT", default="1") != "1",
+                reason="Networkit Backend skipped because $TEST_NETWORKIT != 1 or networkit is not installed.",
+            ),
+            id="NetworkitBackend",
         ),
     )
 
@@ -69,11 +109,12 @@ if os.environ.get("TEST_NETWORKITBACKEND") == "1":
 
     backend_test_params.append(
         pytest.param(
-            NetworkitBackend,
+            (NetworkitBackend, {}),
             marks=pytest.mark.skipif(
                 os.environ.get("TEST_NETWORKITBACKEND") != "1",
                 reason="Networkit Backend skipped because $TEST_NETWORKITBACKEND != 1.",
             ),
+            id="NetworkitBackend",
         ),
     )
 
@@ -82,29 +123,69 @@ if os.environ.get("TEST_IGRAPHBACKEND") == "1":
 
     backend_test_params.append(
         pytest.param(
-            IGraphBackend,
+            (IGraphBackend, {}),
             marks=pytest.mark.skipif(
                 os.environ.get("TEST_IGRAPHBACKEND") != "1",
                 reason="Networkit Backend skipped because $TEST_IGRAPHBACKEND != 1.",
             ),
+            id="IGraphBackend",
         ),
     )
+
+
+# @pytest.mark.parametrize("backend", backend_test_params)
+class TestBackendPersistence:
+    def test_sqlite_persistence(self):
+        if not _CAN_IMPORT_SQL:
+            return
+
+        dbpath = "grand_peristence_test_temp.db"
+        url = "sqlite:///" + dbpath
+
+        # arrange
+        backend = SQLBackend(db_url=url, directed=True)
+        node0 = backend.add_node("A", {"foo": "bar"})
+        backend.commit()
+        backend.close()
+        # act
+        backend = SQLBackend(db_url=url, directed=True)
+        nodes = list(backend.all_nodes_as_iterable())
+        # assert
+        assert node0 in nodes
+
+        # test remove_node
+        backend = SQLBackend(db_url=url, directed=True)
+        node1, node2 = backend.add_node("A", {}), backend.add_node("B", {})
+        backend.add_edge(node1, node2, {})
+        assert backend.has_node(node1)
+        assert backend.has_edge(node1, node2)
+        backend.remove_node(node1)
+        assert not backend.has_node(node1)
+        assert not backend.has_edge(node1, node2)
+        with pytest.raises(KeyError):
+            assert not backend.get_node_by_id(node1)
+
+        # cleanup
+        os.remove(dbpath)
 
 
 @pytest.mark.parametrize("backend", backend_test_params)
 class TestBackend:
     def test_can_create(self, backend):
-        backend()
+        backend, kwargs = backend
+        backend(**kwargs)
 
     def test_can_create_directed_and_undirected_backends(self, backend):
-        b = backend(directed=True)
+        backend, kwargs = backend
+        b = backend(directed=True, **kwargs)
         assert b.is_directed() == True
 
-        b = backend(directed=False)
+        b = backend(directed=False, **kwargs)
         assert b.is_directed() == False
 
     def test_can_add_node(self, backend):
-        G = Graph(backend=backend())
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
         nxG = nx.Graph()
         G.nx.add_node("A", k="v")
         nxG.add_node("A", k="v")
@@ -114,7 +195,8 @@ class TestBackend:
         assert len(G.nx.nodes()) == len(nxG.nodes())
 
     def test_can_update_node(self, backend):
-        G = Graph(backend=backend())
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
         G.nx.add_node("A", k="v", z=3)
         G.nx.add_node("A", k="v2", x=4)
         assert G.nx.nodes["A"]["k"] == "v2"
@@ -122,7 +204,8 @@ class TestBackend:
         assert G.nx.nodes["A"]["z"] == 3
 
     def test_can_add_edge(self, backend):
-        G = Graph(backend=backend())
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
         nxG = nx.Graph()
         G.nx.add_edge("A", "B")
         nxG.add_edge("A", "B")
@@ -132,7 +215,8 @@ class TestBackend:
         assert len(G.nx.edges()) == len(nxG.edges())
 
     def test_can_update_edge(self, backend):
-        G = Graph(backend=backend())
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
         G.nx.add_edge("A", "B", k="v", z=3)
         G.nx.add_edge("A", "B", k="v2", x=4)
         assert G.nx.get_edge_data("A", "B")["k"] == "v2"
@@ -141,7 +225,8 @@ class TestBackend:
         assert len(G.nx.nodes()) == 2
 
     def test_can_get_node(self, backend):
-        G = Graph(backend=backend())
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
         nxG = nx.Graph()
         md = dict(k="B")
         G.nx.add_node("A", **md)
@@ -149,7 +234,8 @@ class TestBackend:
         assert G.nx.nodes["A"] == nxG.nodes["A"]
 
     def test_can_get_edge(self, backend):
-        G = Graph(backend=backend())
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
         nxG = nx.Graph()
         md = {"k": "B"}
         G.nx.add_edge("A", "B", **md)
@@ -157,7 +243,8 @@ class TestBackend:
         assert G.nx.get_edge_data("A", "B") == nxG.get_edge_data("A", "B")
 
     def test_can_get_neighbors(self, backend):
-        G = Graph(backend=backend())
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
         nxG = nx.Graph()
         G.nx.add_edge("A", "B")
         nxG.add_edge("A", "B")
@@ -180,7 +267,8 @@ class TestBackend:
         )
 
     def test_undirected_adj(self, backend):
-        G = Graph(backend=backend())
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
         nxG = nx.Graph()
         assert G.nx._adj == nxG._adj
         G.nx.add_edge("A", "B")
@@ -188,7 +276,8 @@ class TestBackend:
         assert G.nx._adj == nxG._adj
 
     def test_directed_adj(self, backend):
-        G = Graph(backend=backend(directed=True))
+        backend, kwargs = backend
+        G = Graph(backend=backend(directed=True, **kwargs))
         nxG = nx.DiGraph()
         assert G.nx._adj == nxG._adj
         G.nx.add_edge("A", "B")
@@ -196,7 +285,8 @@ class TestBackend:
         assert G.nx._adj == nxG._adj
 
     def test_can_traverse_undirected_graph(self, backend):
-        G = Graph(backend=backend())
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
         nxG = nx.Graph()
         md = dict(k="B")
         G.nx.add_edge("A", "B", **md)
@@ -211,7 +301,8 @@ class TestBackend:
         assert dict(nx.bfs_successors(G.nx, "C")) == dict(nx.bfs_successors(nxG, "C"))
 
     def test_can_traverse_directed_graph(self, backend):
-        G = Graph(backend=backend(directed=True))
+        backend, kwargs = backend
+        G = Graph(backend=backend(directed=True, **kwargs))
         nxG = nx.DiGraph()
         md = dict(k="B")
         G.nx.add_edge("A", "B", **md)
@@ -226,7 +317,8 @@ class TestBackend:
         assert dict(nx.bfs_successors(G.nx, "C")) == dict(nx.bfs_successors(nxG, "C"))
 
     def test_subgraph_isomorphism_undirected(self, backend):
-        G = Graph(backend=backend(directed=False))
+        backend, kwargs = backend
+        G = Graph(backend=backend(directed=False, **kwargs))
         nxG = nx.Graph()
 
         G.nx.add_edge("A", "B")
@@ -243,7 +335,8 @@ class TestBackend:
         ) == len([i for i in GraphMatcher(nxG, nxG).subgraph_monomorphisms_iter()])
 
     def test_subgraph_isomorphism_directed(self, backend):
-        G = Graph(backend=backend(directed=True))
+        backend, kwargs = backend
+        G = Graph(backend=backend(directed=True, **kwargs))
         nxG = nx.DiGraph()
 
         G.nx.add_edge("A", "B")
@@ -260,12 +353,20 @@ class TestBackend:
         ) == len([i for i in DiGraphMatcher(nxG, nxG).subgraph_monomorphisms_iter()])
 
     def test_can_get_edge_metadata(self, backend):
-        G = Graph(backend=backend())
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
         G.nx.add_edge("foo", "bar", baz=True)
         assert list(G.nx.edges(data=True)) == [("foo", "bar", {"baz": True})]
 
+    def test_can_get_edges(self, backend):
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
+        G.nx.add_edge("foo", "bar", baz=True)
+        assert list(G.backend.all_edges_as_iterable()) == [("foo", "bar")]
+
     def test_edge_dne_raises(self, backend):
-        G = Graph(backend=backend())
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
         G.nx.add_edge("foo", "bar", baz=True)
 
         assert G.nx.has_edge("foo", "crab") == False
@@ -275,26 +376,30 @@ class TestBackend:
         #     G.nx.edges[("foo", "crab")]
 
     def test_reverse_edges_in_undirected(self, backend):
-        G = Graph(backend=backend(directed=False), directed=False)
+        backend, kwargs = backend
+        G = Graph(backend=backend(directed=False, **kwargs))
         G.nx.add_edge("foo", "bar", baz=True)
 
         assert G.nx.has_edge("foo", "bar") == True
         assert G.nx.has_edge("bar", "foo") == True
 
     def test_undirected_degree(self, backend):
-        G = Graph(backend=backend(directed=False))
+        backend, kwargs = backend
+        G = Graph(backend=backend(directed=False, **kwargs))
         G.nx.add_edge("foo", "bar", baz=True)
         assert G.nx.degree("foo") == 1
         assert G.nx.degree("bar") == 1
 
     def test_directed_degree(self, backend):
-        G = Graph(backend=backend(directed=True))
+        backend, kwargs = backend
+        G = Graph(backend=backend(directed=True, **kwargs))
         G.nx.add_edge("foo", "bar", baz=True)
         assert G.nx.degree("foo") == 1
         assert G.nx.degree("bar") == 0
 
     def test_undirected_degree_multiple(self, backend):
-        G = Graph(backend=backend(directed=False))
+        backend, kwargs = backend
+        G = Graph(backend=backend(directed=False, **kwargs))
         G.nx.add_edge("foo", "bar", baz=True)
         G.nx.add_edge("foo", "baz", baz=True)
         assert G.nx.degree("foo") == 2
@@ -302,7 +407,8 @@ class TestBackend:
         assert G.nx.degree("baz") == 1
 
     def test_directed_degree_multiple(self, backend):
-        G = Graph(backend=backend(directed=True))
+        backend, kwargs = backend
+        G = Graph(backend=backend(directed=True, **kwargs))
         G.nx.add_edge("foo", "bar", baz=True)
         G.nx.add_edge("foo", "baz", baz=True)
         assert G.nx.degree("foo") == 2
@@ -314,3 +420,65 @@ class TestBackend:
         assert G.nx.in_degree("foo") == 0
         assert G.nx.in_degree("bar") == 1
         assert G.nx.in_degree("baz") == 1
+
+    def test_node_count(self, backend):
+        backend, kwargs = backend
+        G = Graph(backend=backend(**kwargs))
+        G.nx.add_node("foo", bar=True)
+        G.nx.add_node("bar", foo=True)
+        assert len(G.nx) == 2
+
+
+@pytest.mark.benchmark
+@pytest.mark.parametrize("backend", backend_test_params)
+def test_node_addition_performance(backend):
+    backend, kwargs = backend
+    G = Graph(backend=backend(directed=True, **kwargs))
+    for i in range(1000):
+        G.nx.add_node(i)
+    assert len(G.nx) == 1000
+
+
+@pytest.mark.benchmark
+@pytest.mark.parametrize("backend", backend_test_params)
+def test_get_density_performance(backend):
+    backend, kwargs = backend
+    G = Graph(backend=backend(directed=True, **kwargs))
+    for i in range(1000):
+        G.nx.add_node(i)
+    for i in range(1000 - 1):
+        G.nx.add_edge(i, i + 1)
+    assert nx.density(G.nx) <= 0.005
+
+
+class TestDataFrameBackend:
+
+    def test_can_create_empty(self):
+        b = DataFrameBackend()
+        assert b.get_edge_count() == 0
+        assert b.get_node_count() == 0
+
+        b.add_edge("A", "B", {})
+        assert b.get_edge_count() == 1
+        assert b.get_node_count() == 2
+
+    def test_can_create_from_int_dataframes(self):
+        # Create an edges DataFrame
+        edges = pd.DataFrame(
+            {
+                "source": [0, 1, 2, 3, 4],
+                "target": [1, 2, 3, 4, 0],
+                "weight": [1, 2, 3, 4, 5],
+            }
+        )
+
+        nodes = pd.DataFrame(
+            {
+                "name": [0, 1, 2, 3, 4],
+                "value": [1, 2, 3, 4, 5],
+            }
+        )
+
+        b = DataFrameBackend(edge_df=edges, node_df=nodes)
+        assert b.get_edge_count() == 5
+        assert b.get_node_count() == 5

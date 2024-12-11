@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="grand-graph",
-    version="0.4.1",
+    version="0.6.0",
     author="Jordan Matelsky",
     author_email="opensource@matelsky.com",
     description="Graph database wrapper for non-graph datastores",
@@ -18,6 +18,8 @@ setuptools.setup(
     extras_require={
         "sql": ["SQLAlchemy>=1.3"],
         "dynamodb": ["boto3"],
+        "igraph": ["igraph"],
+        "networkit": ["cmake", "cython", "networkit", "numpy<2.0.0"],
     },
     classifiers=[
         "Programming Language :: Python :: 3",

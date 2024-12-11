@@ -65,6 +65,17 @@ class Backend(abc.ABC):
         """
         ...
 
+    def add_nodes_from(self, nodes_for_adding, **attr):
+        """
+        Add nodes to the graph.
+
+        Arguments:
+            nodes_for_adding: nodes to add
+            attr: additional attributes
+        """
+        for node, metadata in nodes_for_adding:
+            self.add_node(node, {**attr, **metadata})
+
     def get_node_by_id(self, node_name: Hashable):
         """
         Return the data associated with a node.
@@ -102,7 +113,26 @@ class Backend(abc.ABC):
         Returns:
             bool: True if the node exists
         """
-        ...
+        try:
+            return self.get_node_by_id(u) is not None
+        except KeyError:
+            return False
+
+    def has_edge(self, u: Hashable, v: Hashable) -> bool:
+        """
+        Return true if the edge exists in the graph.
+
+        Arguments:
+            u (Hashable): The source node ID
+            v (Hashable): The target node ID
+
+        Returns:
+            bool: True if the edge exists
+        """
+        try:
+            return self.get_edge_by_id(u, v) is not None
+        except KeyError:
+            return False
 
     def add_edge(self, u: Hashable, v: Hashable, metadata: dict):
         """
@@ -121,6 +151,17 @@ class Backend(abc.ABC):
 
         """
         ...
+
+    def add_edges_from(self, ebunch_to_add, **attr):
+        """
+        Add new edges to the graph.
+
+        Arguments:
+            ebunch_to_add: list of (source, target, metadata)
+            attr: additional common attributes
+        """
+        for u, v, metadata in ebunch_to_add:
+            self.add_edge(u, v, {**attr, **metadata})
 
     def all_edges_as_iterable(self, include_metadata: bool = False) -> Collection:
         """
@@ -197,6 +238,19 @@ class Backend(abc.ABC):
         """
         return len([i for i in self.all_nodes_as_iterable()])
 
+    def get_edge_count(self) -> int:
+        """
+        Get an integer count of the number of edges in this graph.
+
+        Arguments:
+            None
+
+        Returns:
+            int: The count of edges
+
+        """
+        return len([i for i in self.all_edges_as_iterable()])
+
     def degree(self, u: Hashable) -> int:
         """
         Get the degree of a node.
@@ -208,7 +262,7 @@ class Backend(abc.ABC):
             int: The degree of the node
 
         """
-        return len(self.get_node_neighbors(u))
+        return len([i for i in self.get_node_neighbors(u)])
 
     def degrees(self, nbunch=None) -> Collection:
         return {
@@ -257,18 +311,15 @@ class Backend(abc.ABC):
 
 
 class CachedBackend(Backend):
-
     """
     A proxy Backend that serves as a cache for any other grand.Backend.
 
     """
 
-    def __init__(self, backend: Backend):
-        ...
+    def __init__(self, backend: Backend): ...
 
 
 class InMemoryCachedBackend(CachedBackend):
-
     """
     A proxy Backend that serves as a cache for any other grand.Backend.
 
@@ -284,14 +335,20 @@ class InMemoryCachedBackend(CachedBackend):
 
     _default_uncacheable_methods = [
         "add_node",
+        "add_nodes_from",
         "add_edge",
+        "add_edges_from",
         "ingest_from_edgelist_dataframe",
+        "remove_node"
     ]
 
     _default_write_methods = [
         "add_node",
+        "add_nodes_from",
         "add_edge",
+        "add_edges_from",
         "ingest_from_edgelist_dataframe",
+        "remove_node"
     ]
 
     def __init__(

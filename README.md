@@ -1,6 +1,8 @@
 <div align=center><img src="docs/grand.png" width=400 /></div>
 
-<div align=center><a href="https://pypi.org/project/grand-graph/"><img src="https://img.shields.io/pypi/v/grand-graph?style=for-the-badge" /></a> <a href="https://app.codecov.io/gh/aplbrain/grand"><img alt="Codecov" src="https://img.shields.io/codecov/c/github/aplbrain/grand?style=for-the-badge"></a> <img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/aplbrain/grand/Python%20package?style=for-the-badge"></div>
+<div align=center><a href="https://pypi.org/project/grand-graph/"><img src="https://img.shields.io/pypi/v/grand-graph?style=for-the-badge" /></a> <a href="https://app.codecov.io/gh/aplbrain/grand"><img alt="Codecov" src="https://img.shields.io/codecov/c/github/aplbrain/grand?style=for-the-badge"></a></div>
+
+<!--  <a href="https://github.com/aplbrain/grand/actions/workflows/python-package.yml"><img alt="GitHub Workflow Status (with branch)" src="https://img.shields.io/github/actions/workflow/status/aplbrain/grand/python-package.yml?style=for-the-badge"></a> -->
 
 <br />
 
@@ -92,21 +94,21 @@ print(G.nx.edges(data=True)) # contains attributes, even though graph is stored 
 <th>🔴 = Unsupported</th>
 </tr></table>
 
-| Dialect            | Description & Notes                            | Status |
-| ------------------ | ---------------------------------------------- | ------ |
-| `IGraphDialect`    | Python-IGraph interface (no metadata)          | 🤔     |
-| `NetworkXDialect`  | NetworkX-like interface for graph manipulation | ✅     |
-| `NetworkitDialect` | Networkit-like interface (no metadata)         | ✅     |
+| Dialect            | Description & Notes      | Status |
+| ------------------ | ------------------------ | ------ |
+| `IGraphDialect`    | Python-IGraph interface  | ✅     |
+| `NetworkXDialect`  | NetworkX-like interface  | ✅     |
+| `NetworkitDialect` | Networkit-like interface | ✅     |
 
-| Backend            | Description & Notes                               | Status |
-| ------------------ | ------------------------------------------------- | ------ |
-| `DataFrameBackend` | A graph stored in pandas-like tables              | ✅     |
-| `DynamoDBBackend`  | Graphs stored in edge/node tables in AWS DynamoDB | ✅     |
-| `GremlinBackend`   | For Gremlin queries (Neptune, Janus, TinkerPop)   | ✅     |
-| `IGraphBackend`    | An IGraph graph, in memory                        | ✅     |
-| `NetworkitBackend` | A Networkit graph, in memory                      | ✅     |
-| `NetworkXBackend`  | A NetworkX graph, in memory                       | ✅     |
-| `SQLBackend`       | A graph stored in two SQL-queryable sister tables | ✅     |
+| Backend            | Description & Notes          | Status |
+| ------------------ | ---------------------------- | ------ |
+| `DataFrameBackend` | Stored in pandas-like tables | ✅     |
+| `DynamoDBBackend`  | Edge/node tables in DynamoDB | ✅     |
+| `GremlinBackend`   | For Gremlin datastores       | ✅     |
+| `IGraphBackend`    | An IGraph graph, in memory   | ✅     |
+| `NetworkitBackend` | A Networkit graph, in memory | ✅     |
+| `NetworkXBackend`  | A NetworkX graph, in memory  | ✅     |
+| `SQLBackend`       | Two SQL-queryable tables     | ✅     |
 
 You can read more about usage and learn about backends and dialects in [the wiki](https://github.com/aplbrain/grand/wiki).
 

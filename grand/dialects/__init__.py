@@ -36,7 +36,7 @@ class _GrandAdjacencyView(AdjacencyView):
             }
 
     def __len__(self):
-        return len(self._parent.backend.get_node_count())
+        return self._parent.backend.get_node_count()
 
     def __iter__(self):
         return iter(self._parent.backend.all_nodes_as_iterable(include_metadata=False))
@@ -101,8 +101,14 @@ class NetworkXDialect(nx.Graph):
     def add_node(self, name: Hashable, **kwargs):
         return self.parent.backend.add_node(name, kwargs)
 
+    def add_nodes_from(self, nodes_for_adding, **attr):
+        return self.parent.backend.add_nodes_from(nodes_for_adding, **attr)
+
     def add_edge(self, u: Hashable, v: Hashable, **kwargs):
         return self.parent.backend.add_edge(u, v, kwargs)
+
+    def add_edges_from(self, ebunch_to_add, **attr):
+        return self.parent.backend.add_edges_from(ebunch_to_add, **attr)
 
     def remove_node(self, name: Hashable):
         if hasattr(self.parent.backend, "remove_node"):
@@ -161,11 +167,31 @@ class NetworkXDialect(nx.Graph):
         """
         return _GrandAdjacencyView(self, "pred")
 
+    @property
+    def graph(self):
+        return {}
+
     def in_degree(self, nbunch=None):
         return self.parent.backend.in_degrees(nbunch)
 
     def out_degree(self, nbunch=None):
         return self.parent.backend.out_degrees(nbunch)
+
+    def is_directed(self):
+        return self.parent.backend.is_directed()
+
+    def __len__(self):
+        return self.parent.backend.get_node_count()
+
+    def number_of_nodes(self):
+        return self.parent.backend.get_node_count()
+
+    def number_of_edges(self, u=None, v=None):
+        if u is None and v is None:
+            return self.parent.backend.get_edge_count()
+        # Get the number of edges between u and v. because we don't support
+        # multigraphs, this is 1 if there is an edge, 0 otherwise.
+        return 1 if self.parent.backend.has_edge(u, v) else 0
 
 
 class IGraphDialect(nx.Graph):
@@ -190,7 +216,7 @@ class IGraphDialect(nx.Graph):
     def add_vertices(self, num_verts: int):
         old_max = len(self.vs)
         for new_v_index in range(num_verts):
-            return self.parent.backend.add_node(new_v_index + old_max, {})
+            self.parent.backend.add_node(new_v_index + old_max, {})
 
     @property
     def vs(self):
@@ -205,8 +231,8 @@ class IGraphDialect(nx.Graph):
         ]
 
     def add_edges(self, edgelist: List[Tuple[Hashable, Hashable]]):
-        for (u, v) in edgelist:
-            return self.parent.backend.add_edge(u, v, {})
+        for u, v in edgelist:
+            self.parent.backend.add_edge(u, v, {})
 
     def get_edgelist(self):
         return self.parent.backend.all_edges_as_iterable(include_metadata=False)
@@ -226,7 +252,7 @@ class NetworkitDialect:
 
     def addNode(self):
         new_id = self.parent.backend.get_node_count()
-        self.parent.backend.add_node(new_id)
+        self.parent.backend.add_node(new_id, {})
         return new_id
 
     def addEdge(self, u: Hashable, v: Hashable) -> None:
@@ -266,7 +292,7 @@ class NetworkitDialect:
 
     def density(self):
         # TODO: implement backend#degree?
-        E = len(self.parent.backend.all_edges_as_iterable())
+        E = self.parent.backend.get_edge_count()
         V = self.parent.backend.get_node_count()
 
         if self.parent.backend.is_directed():
@@ -278,7 +304,7 @@ class NetworkitDialect:
         return self.parent.backend.get_node_count()
 
     def numberOfEdges(self) -> int:
-        return len(self.parent.backend.all_edges_as_iterable())
+        return self.parent.backend.get_edge_count()
 
     def removeEdge(self, u, v) -> None:
         raise NotImplementedError
